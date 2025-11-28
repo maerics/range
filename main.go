@@ -34,64 +34,77 @@ func processRanges(cli *CLI) error {
 }
 
 func processRange(expr string, step float64) error {
+	values, err := evaluateRange(expr, step)
+	if err != nil {
+		return err
+	}
+	for _, v := range values {
+		fmt.Println(v)
+	}
+	return nil
+}
+
+func evaluateRange(expr string, step float64) ([]float64, error) {
 	expr = strings.TrimSpace(expr)
 
 	// Case 1: Single number (e.g., "10" -> 0-9)
 	if matched, _ := regexp.MatchString(`^\d+$`, expr); matched {
 		n, err := strconv.Atoi(expr)
 		if err != nil {
-			return err
+			return nil, err
 		}
+		values := make([]float64, n)
 		for i := 0; i < n; i++ {
-			fmt.Println(i)
+			values[i] = float64(i)
 		}
-		return nil
+		return values, nil
 	}
 
 	// Case 2: Range with ".." (e.g., "2..4")
 	if strings.Contains(expr, "..") {
 		parts := strings.Split(expr, "..")
 		if len(parts) != 2 {
-			return fmt.Errorf("invalid range format: expected 'start..end'")
+			return nil, fmt.Errorf("invalid range format: expected 'start..end'")
 		}
 		start, err := parseFloat(parts[0])
 		if err != nil {
-			return fmt.Errorf("invalid start value: %w", err)
+			return nil, fmt.Errorf("invalid start value: %w", err)
 		}
 		end, err := parseFloat(parts[1])
 		if err != nil {
-			return fmt.Errorf("invalid end value: %w", err)
+			return nil, fmt.Errorf("invalid end value: %w", err)
 		}
-		printRange(start, end, step)
-		return nil
+		return generateRange(start, end, step, true, true), nil
 	}
 
 	// Case 3: Range with brackets (e.g., "[2.5,4.5]", "(2.5,4.5)", "[2.5,4.5)", etc.)
-	if (strings.HasPrefix(expr, "[") || strings.HasPrefix(expr, "(")) &&
-		(strings.HasSuffix(expr, "]") || strings.HasSuffix(expr, ")")) {
+	// First trim outer quotes if present
+	trimmedExpr := strings.Trim(expr, "'\"")
+	// Check if it's a bracket notation after removing quotes
+	if (strings.HasPrefix(trimmedExpr, "[") || strings.HasPrefix(trimmedExpr, "(")) &&
+		(strings.HasSuffix(trimmedExpr, "]") || strings.HasSuffix(trimmedExpr, ")")) {
 		// Determine inclusive/exclusive for start and end
-		startInclusive := strings.HasPrefix(expr, "[")
-		endInclusive := strings.HasSuffix(expr, "]")
+		startInclusive := strings.HasPrefix(trimmedExpr, "[")
+		endInclusive := strings.HasSuffix(trimmedExpr, "]")
 
-		// Remove brackets and quotes if present
-		expr = strings.Trim(expr, "[]()'\"")
-		parts := strings.Split(expr, ",")
+		// Remove brackets and any remaining quotes
+		trimmedExpr = strings.Trim(trimmedExpr, "[]()'\"")
+		parts := strings.Split(trimmedExpr, ",")
 		if len(parts) != 2 {
-			return fmt.Errorf("invalid bracket range format: expected '[start,end]' or '(start,end)' or mixed")
+			return nil, fmt.Errorf("invalid bracket range format: expected '[start,end]' or '(start,end)' or mixed")
 		}
 		start, err := parseFloat(strings.TrimSpace(parts[0]))
 		if err != nil {
-			return fmt.Errorf("invalid start value: %w", err)
+			return nil, fmt.Errorf("invalid start value: %w", err)
 		}
 		end, err := parseFloat(strings.TrimSpace(parts[1]))
 		if err != nil {
-			return fmt.Errorf("invalid end value: %w", err)
+			return nil, fmt.Errorf("invalid end value: %w", err)
 		}
-		printRangeWithBounds(start, end, step, startInclusive, endInclusive)
-		return nil
+		return generateRange(start, end, step, startInclusive, endInclusive), nil
 	}
 
-	return fmt.Errorf("unrecognized range expression format")
+	return nil, fmt.Errorf("unrecognized range expression format")
 }
 
 func parseFloat(s string) (float64, error) {
@@ -100,13 +113,25 @@ func parseFloat(s string) (float64, error) {
 }
 
 func printRange(start, end, step float64) {
-	printRangeWithBounds(start, end, step, true, true)
+	values := generateRange(start, end, step, true, true)
+	for _, v := range values {
+		fmt.Println(v)
+	}
 }
 
 func printRangeWithBounds(start, end, step float64, startInclusive, endInclusive bool) {
+	values := generateRange(start, end, step, startInclusive, endInclusive)
+	for _, v := range values {
+		fmt.Println(v)
+	}
+}
+
+func generateRange(start, end, step float64, startInclusive, endInclusive bool) []float64 {
 	if step == 0 {
 		step = 1.0
 	}
+
+	values := []float64{}
 
 	if start <= end {
 		// Ascending range
@@ -124,7 +149,7 @@ func printRangeWithBounds(start, end, step float64, startInclusive, endInclusive
 					break
 				}
 			}
-			fmt.Println(val)
+			values = append(values, val)
 			val += step
 		}
 	} else {
@@ -143,8 +168,10 @@ func printRangeWithBounds(start, end, step float64, startInclusive, endInclusive
 					break
 				}
 			}
-			fmt.Println(val)
+			values = append(values, val)
 			val -= step
 		}
 	}
+
+	return values
 }
